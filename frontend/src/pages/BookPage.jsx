@@ -1,5 +1,144 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { getSession } from '../auth'
 import translations from '../translations.json'
+
+const youtubeTracks = [
+  {
+    id: 'exit-sign',
+    startSeconds: 24,
+    title: 'Exit Sign',
+    videoId: 'sJt_i0hOugA',
+  },
+]
+
+const MUSIC_PLAYER_POSITION_KEY = 'gi:bookMusicPosition'
+const WISH_TYPE_SPEED_MS = 72
+const FALLBACK_DISPLAY_NAMES = {
+  bach: 'B\u00e1ch',
+  han: 'H\u00e2n',
+  hieu: 'Hi\u1ec7u',
+  huy: 'Huy',
+  khang: 'Khang',
+  minh: 'Minh',
+  ngan: 'Ng\u00e2n',
+  nguyen: 'Nguy\u00ean',
+  nhi: 'Nhi',
+  phuc_anh: 'Ph\u00fac Anh',
+  quan: 'Qu\u00e2n',
+  quynh_anh: 'Qu\u1ef3nh Anh',
+  thu: 'Th\u01b0',
+}
+let youtubeApiPromise = null
+
+function loadYoutubeApi() {
+  if (window.YT?.Player) {
+    return Promise.resolve(window.YT)
+  }
+
+  if (!youtubeApiPromise) {
+    youtubeApiPromise = new Promise((resolve, reject) => {
+      const previousCallback = window.onYouTubeIframeAPIReady
+
+      window.onYouTubeIframeAPIReady = () => {
+        previousCallback?.()
+        resolve(window.YT)
+      }
+
+      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+        const script = document.createElement('script')
+        script.src = 'https://www.youtube.com/iframe_api'
+        script.onerror = () => {
+          reject(new Error('YouTube API failed to load'))
+        }
+        document.head.appendChild(script)
+      }
+    })
+  }
+
+  return youtubeApiPromise.catch((error) => {
+    youtubeApiPromise = null
+    throw error
+  })
+}
+
+function extractYoutubeVideoId(value) {
+  const input = value.trim()
+
+  if (/^[a-zA-Z0-9_-]{11}$/.test(input)) {
+    return input
+  }
+
+  try {
+    const url = new URL(input)
+    const host = url.hostname.replace(/^www\./, '')
+
+    if (host === 'youtu.be') {
+      return url.pathname.split('/').filter(Boolean)[0] ?? null
+    }
+
+    if (host.endsWith('youtube.com')) {
+      const watchId = url.searchParams.get('v')
+
+      if (watchId) {
+        return watchId
+      }
+
+      const parts = url.pathname.split('/').filter(Boolean)
+      const markerIndex = parts.findIndex((part) => ['embed', 'live', 'shorts'].includes(part))
+
+      return markerIndex >= 0 ? parts[markerIndex + 1] ?? null : null
+    }
+  } catch {
+    const match = input.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([a-zA-Z0-9_-]{11})/)
+
+    return match?.[1] ?? null
+  }
+
+  return null
+}
+
+function getYoutubeErrorMessage(code) {
+  if (code === 2) {
+    return 'Invalid YouTube video ID'
+  }
+
+  if (code === 5) {
+    return 'This video cannot play in the embedded player'
+  }
+
+  if (code === 100) {
+    return 'This video was not found or is private'
+  }
+
+  if (code === 101 || code === 150) {
+    return 'This video does not allow embedding'
+  }
+
+  return 'YouTube could not play this video'
+}
+
+function getBookDisplayName() {
+  const session = getSession()
+
+  if (session.displayName) {
+    return session.displayName
+  }
+
+  const tokenPayload = session.token?.split('.')[0]
+
+  if (!tokenPayload) {
+    return null
+  }
+
+  try {
+    const normalizedPayload = tokenPayload.replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(window.atob(normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '=')))
+
+    return payload.displayName ?? FALLBACK_DISPLAY_NAMES[payload.username] ?? payload.username ?? null
+  } catch {
+    return null
+  }
+}
 
 const classMedia = [
   { src: '/images/class_1.jpg', type: 'image' },
@@ -7,8 +146,9 @@ const classMedia = [
   { src: '/images/class_3.jpg', type: 'image' },
   { src: '/images/class_4.jpg', type: 'image' },
   { src: '/images/class_5.jpg', type: 'image' },
-  { src: '/images/class_6.jpg', type: 'image' },
-  { src: '/images/class_7.jpg', type: 'image' },
+  { src: '/images/class_6.JPG', type: 'image' },
+  { src: '/images/class_7.JPG', type: 'image' },
+  { src: '/images/class_8.JPG', type: 'image' },
   { objectPosition: 'center top', src: '/images/frau_linh_lam.jpg', type: 'image' },
 ]
 
@@ -19,9 +159,53 @@ const nguyenMedia = [
   { objectPosition: 'center top', src: '/images/nguyen_4.jpg', type: 'image' },
   { src: '/images/nguyen_5.jpg', type: 'image' },
   { objectPosition: 'center top', src: '/images/nguyen_6.jpg', type: 'image' },
-  { src: '/images/nguyen_7.jpg', type: 'image' },
+  { objectPosition: 'center top', src: '/images/nguyen_7.jpg', type: 'image' },
+  { src: '/images/troll.png', type: 'image' },
   { src: '/images/nguyen_8.mp4', type: 'video' },
   { src: '/images/nguyen_9.mp4', type: 'video' },
+]
+
+const personSections = [
+  {
+    media: [{ objectPosition: 'center top', src: '/images/quan.jpg', type: 'image' }],
+    section: 'quan',
+    title: 'Qu\u00e2n',
+  },
+  {
+    media: [{ objectPosition: 'center top', src: '/images/panh.JPG', type: 'image' }],
+    section: 'panh',
+    title: 'Ph\u00fac Anh',
+  },
+  {
+    media: [{ objectPosition: 'center top', src: '/images/quyanh.jpg', type: 'image' }],
+    section: 'quyanh',
+    title: 'Qu\u1ef3nh Anh',
+  },
+  {
+    media: [{ objectPosition: 'center top', src: '/images/khang.JPG', type: 'image' }],
+    section: 'khang',
+    title: 'Khang',
+  },
+  {
+    media: [{ objectPosition: 'center top', src: '/images/huy.JPG', type: 'image' }],
+    section: 'huy',
+    title: 'Huy',
+  },
+  {
+    media: [{ objectPosition: 'center top', src: '/images/backi.JPG', type: 'image' }],
+    section: 'backi',
+    title: 'B\u00e1ch',
+  },
+  {
+    media: [{ objectPosition: 'center top', src: '/images/minh.JPG', type: 'image' }],
+    section: 'minh',
+    title: 'Minh',
+  },
+  {
+    media: [{ display: 'contain', objectPosition: 'center', src: '/images/trio.jpg', type: 'image' }],
+    section: 'trio',
+    title: 'Trio',
+  },
 ]
 
 function createMediaPages(media, section) {
@@ -38,25 +222,56 @@ function createMediaPages(media, section) {
   return pages
 }
 
-const classPages = createMediaPages(classMedia, 'class')
-const nguyenPages = createMediaPages(nguyenMedia, 'nguyen')
-
-const bookPages = [
+const bookSections = [
   {
-    type: 'contents',
-  },
-  {
+    media: classMedia,
+    section: 'class',
     titleKey: 'contentsClass',
-    type: 'section',
   },
-  ...classPages,
   {
+    media: nguyenMedia,
+    section: 'nguyen',
     titleKey: 'contentsNguyen',
-    type: 'section',
   },
-  ...nguyenPages,
+  ...personSections,
 ]
 
+function createBookPages(sections) {
+  return [
+    {
+      type: 'contents',
+    },
+    ...sections.flatMap((section) => [
+      {
+        section: section.section,
+        title: section.title,
+        titleKey: section.titleKey,
+        type: 'section',
+      },
+      ...createMediaPages(section.media, section.section),
+    ]),
+  ]
+}
+
+function createContentsEntries(sections) {
+  let pageNumber = 2
+
+  return sections.map((section) => {
+    const entry = {
+      pageNumber,
+      section: section.section,
+      title: section.title,
+      titleKey: section.titleKey,
+    }
+
+    pageNumber += 1 + Math.ceil(section.media.length / 2)
+
+    return entry
+  })
+}
+
+const bookPages = createBookPages(bookSections)
+const contentsEntries = createContentsEntries(bookSections)
 const coverImage = '/images/auf_geht.jpg'
 const backCoverImage = '/images/auf_geht_1.jpg'
 const flipDuration = 980
@@ -65,16 +280,13 @@ function BookContents({ text }) {
   return (
     <div className="book-contents">
       <h2>{text.contentsTitle}</h2>
-      <div className="toc-row">
-        <span>{text.contentsClass}</span>
-        <span className="toc-dots" />
-        <span>1</span>
-      </div>
-      <div className="toc-row">
-        <span>{text.contentsNguyen}</span>
-        <span className="toc-dots" />
-        <span>12</span>
-      </div>
+      {contentsEntries.map((entry) => (
+        <div className="toc-row" key={entry.section}>
+          <span>{entry.title ?? text[entry.titleKey]}</span>
+          <span className="toc-dots" />
+          <span>{entry.pageNumber}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -82,7 +294,7 @@ function BookContents({ text }) {
 function BookSectionTitle({ page, text }) {
   return (
     <div className="book-section-title">
-      <h2>{text[page.titleKey]}</h2>
+      <h2>{page.title ?? text[page.titleKey]}</h2>
     </div>
   )
 }
@@ -90,6 +302,7 @@ function BookSectionTitle({ page, text }) {
 function Lightbox({ item, onClose }) {
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isImageDragging, setIsImageDragging] = useState(false);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
 
@@ -120,6 +333,7 @@ function Lightbox({ item, onClose }) {
           onPointerDown={(e) => {
             if (zoom > 1) {
               isDragging.current = true;
+              setIsImageDragging(true);
               lastPos.current = { x: e.clientX, y: e.clientY };
               e.target.setPointerCapture(e.pointerId);
             }
@@ -135,19 +349,21 @@ function Lightbox({ item, onClose }) {
           onPointerUp={(e) => {
             if (isDragging.current) {
               isDragging.current = false;
+              setIsImageDragging(false);
               e.target.releasePointerCapture(e.pointerId);
             }
           }}
           onPointerCancel={(e) => {
             if (isDragging.current) {
               isDragging.current = false;
+              setIsImageDragging(false);
               e.target.releasePointerCapture(e.pointerId);
             }
           }}
           style={{
             transform: `scale(${zoom}) translate(${position.x/zoom}px, ${position.y/zoom}px)`,
-            transition: isDragging.current ? 'none' : 'transform 0.2s',
-            cursor: zoom > 1 ? (isDragging.current ? 'grabbing' : 'grab') : 'default'
+            transition: isImageDragging ? 'none' : 'transform 0.2s',
+            cursor: zoom > 1 ? (isImageDragging ? 'grabbing' : 'grab') : 'default'
           }}
           draggable={false}
         />
@@ -170,6 +386,7 @@ function BookMediaItem({ item, pageNumber, itemNumber, text, onMediaClick }) {
   return (
     <img 
       alt={label} 
+      className={item.display === 'contain' ? 'book-media-contain' : undefined}
       src={item.src} 
       style={{ objectPosition: item.objectPosition, cursor: 'zoom-in' }} 
       onClick={() => onMediaClick(item)} 
@@ -221,8 +438,404 @@ function BookPageContent({ page, pageNumber, text, variant, onMediaClick }) {
   )
 }
 
+function YoutubeMusicPlayer() {
+  const playerElementRef = useRef(null)
+  const musicPlayerRef = useRef(null)
+  const playerRef = useRef(null)
+  const isReadyRef = useRef(false)
+  const pendingPlayRef = useRef(false)
+  const selectedTrackRef = useRef(youtubeTracks[0])
+  const musicDragRef = useRef({
+    isDragging: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    originX: 24,
+    originY: 24,
+  })
+  const [customTrack, setCustomTrack] = useState(null)
+  const [selectedTrackId, setSelectedTrackId] = useState(youtubeTracks[0].id)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isReady, setIsReady] = useState(false)
+  const [isPlayerRequested, setIsPlayerRequested] = useState(false)
+  const [playerMountKey, setPlayerMountKey] = useState(0)
+  const [isDraggingMusic, setIsDraggingMusic] = useState(false)
+  const [musicQuery, setMusicQuery] = useState('')
+  const [musicMessage, setMusicMessage] = useState('')
+  const [youtubeFallbackUrl, setYoutubeFallbackUrl] = useState(
+    `https://www.youtube.com/watch?v=${youtubeTracks[0].videoId}`,
+  )
+  const [musicPosition, setMusicPosition] = useState(() => {
+    try {
+      const savedPosition = JSON.parse(
+        window.localStorage.getItem(MUSIC_PLAYER_POSITION_KEY) ?? 'null',
+      )
+
+      if (typeof savedPosition?.x === 'number' && typeof savedPosition?.y === 'number') {
+        return savedPosition
+      }
+    } catch {
+      // Keep the default position when saved data is invalid.
+    }
+
+    return { x: 24, y: 24 }
+  })
+  const availableTracks = customTrack ? [...youtubeTracks, customTrack] : youtubeTracks
+  const selectedTrack = availableTracks.find((track) => track.id === selectedTrackId) ?? youtubeTracks[0]
+
+  useEffect(() => {
+    isReadyRef.current = isReady
+  }, [isReady])
+
+  useEffect(() => {
+    if (!isPlayerRequested) {
+      return undefined
+    }
+
+    let isMounted = true
+    let readyTimer = null
+
+    if (playerRef.current) {
+      return undefined
+    }
+
+    setMusicMessage('Loading YouTube player...')
+    readyTimer = window.setTimeout(() => {
+      if (!isMounted || isReadyRef.current) {
+        return
+      }
+
+      pendingPlayRef.current = false
+      playerRef.current?.destroy()
+      playerRef.current = null
+      setIsPlayerRequested(false)
+      setMusicMessage('YouTube player was blocked. Try turning off adblock for this page.')
+    }, 8000)
+
+    loadYoutubeApi()
+      .then((YT) => {
+        if (!isMounted || !playerElementRef.current) {
+          return
+        }
+
+        playerRef.current = new YT.Player(playerElementRef.current, {
+          height: '200',
+          host: 'https://www.youtube-nocookie.com',
+          playerVars: {
+            controls: 1,
+            origin: window.location.origin,
+            playsinline: 1,
+            rel: 0,
+            start: selectedTrackRef.current.startSeconds,
+          },
+          videoId: selectedTrackRef.current.videoId,
+          width: '200',
+          events: {
+            onReady: () => {
+              window.clearTimeout(readyTimer)
+              setIsReady(true)
+              setYoutubeFallbackUrl(`https://www.youtube.com/watch?v=${selectedTrackRef.current.videoId}`)
+
+              if (pendingPlayRef.current) {
+                pendingPlayRef.current = false
+                setMusicMessage('Loading YouTube video...')
+                playerRef.current?.loadVideoById({
+                  startSeconds: selectedTrackRef.current.startSeconds,
+                  videoId: selectedTrackRef.current.videoId,
+                })
+                window.setTimeout(() => {
+                  const playerState = playerRef.current?.getPlayerState()
+
+                  if (playerState !== 1 && playerState !== 3) {
+                    setMusicMessage('If nothing plays, adblock or the video embed setting may be blocking it')
+                  }
+                }, 1800)
+                return
+              }
+
+              setMusicMessage('Ready')
+              playerRef.current?.cueVideoById({
+                startSeconds: selectedTrackRef.current.startSeconds,
+                videoId: selectedTrackRef.current.videoId,
+              })
+            },
+            onError: (event) => {
+              pendingPlayRef.current = false
+              setIsPlaying(false)
+              setYoutubeFallbackUrl(`https://www.youtube.com/watch?v=${selectedTrackRef.current.videoId}`)
+              setMusicMessage(getYoutubeErrorMessage(event.data))
+            },
+            onStateChange: (event) => {
+              if (event.data === YT.PlayerState.PLAYING) {
+                setIsPlaying(true)
+                setMusicMessage('')
+              }
+
+              if (
+                event.data === YT.PlayerState.PAUSED ||
+                event.data === YT.PlayerState.ENDED ||
+                event.data === YT.PlayerState.CUED
+              ) {
+                setIsPlaying(false)
+              }
+            },
+          },
+        })
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return
+        }
+
+        window.clearTimeout(readyTimer)
+        pendingPlayRef.current = false
+        setIsPlayerRequested(false)
+        setMusicMessage('YouTube API was blocked. Try turning off adblock for this page.')
+      })
+
+    return () => {
+      isMounted = false
+      window.clearTimeout(readyTimer)
+      playerRef.current?.destroy()
+      playerRef.current = null
+    }
+  }, [isPlayerRequested, playerMountKey])
+
+  useEffect(() => {
+    window.localStorage.setItem(MUSIC_PLAYER_POSITION_KEY, JSON.stringify(musicPosition))
+  }, [musicPosition])
+
+  function clampMusicPosition(position) {
+    const player = musicPlayerRef.current
+    const width = player?.offsetWidth ?? 224
+    const height = player?.offsetHeight ?? 320
+    const padding = 8
+
+    return {
+      x: Math.min(Math.max(position.x, padding), Math.max(window.innerWidth - width - padding, padding)),
+      y: Math.min(Math.max(position.y, padding), Math.max(window.innerHeight - height - padding, padding)),
+    }
+  }
+
+  function handleMusicPointerDown(event) {
+    const interactiveElement = event.target.closest('button, input, select, iframe')
+
+    if (interactiveElement) {
+      return
+    }
+
+    event.preventDefault()
+
+    musicDragRef.current = {
+      isDragging: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: musicPosition.x,
+      originY: musicPosition.y,
+    }
+
+    setIsDraggingMusic(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  function handleMusicPointerMove(event) {
+    const drag = musicDragRef.current
+
+    if (!drag.isDragging || drag.pointerId !== event.pointerId) {
+      return
+    }
+
+    setMusicPosition(
+      clampMusicPosition({
+        x: drag.originX + event.clientX - drag.startX,
+        y: drag.originY + event.clientY - drag.startY,
+      }),
+    )
+  }
+
+  function handleMusicPointerUp(event) {
+    const drag = musicDragRef.current
+
+    if (!drag.isDragging || drag.pointerId !== event.pointerId) {
+      return
+    }
+
+    musicDragRef.current = {
+      ...drag,
+      isDragging: false,
+      pointerId: null,
+    }
+    setIsDraggingMusic(false)
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  function rebuildPlayer(track, shouldPlay) {
+    pendingPlayRef.current = shouldPlay
+    playerRef.current?.destroy()
+    playerRef.current = null
+    isReadyRef.current = false
+    setIsReady(false)
+    setIsPlaying(false)
+    setIsPlayerRequested(true)
+    setMusicMessage(shouldPlay ? 'Loading YouTube video...' : 'Selected. Press play to start')
+    setPlayerMountKey((currentKey) => currentKey + 1)
+    setYoutubeFallbackUrl(`https://www.youtube.com/watch?v=${track.videoId}`)
+  }
+
+  function loadTrack(track, shouldPlay) {
+    setYoutubeFallbackUrl(`https://www.youtube.com/watch?v=${track.videoId}`)
+
+    if (!playerRef.current || !isReady) {
+      rebuildPlayer(track, shouldPlay)
+      return
+    }
+
+    if (shouldPlay) {
+      rebuildPlayer(track, true)
+    } else {
+      playerRef.current.cueVideoById({
+        startSeconds: track.startSeconds,
+        videoId: track.videoId,
+      })
+      setIsPlaying(false)
+    }
+  }
+
+  function handleTrackChange(event) {
+    const nextTrack = availableTracks.find((track) => track.id === event.target.value) ?? youtubeTracks[0]
+    const wasPlaying = isPlaying
+
+    selectedTrackRef.current = nextTrack
+    setSelectedTrackId(nextTrack.id)
+    setMusicMessage('')
+    loadTrack(nextTrack, wasPlaying)
+  }
+
+  function handleMusicSearch(event) {
+    event.preventDefault()
+
+    const query = musicQuery.trim()
+
+    if (!query) {
+      return
+    }
+
+    const videoId = extractYoutubeVideoId(query)
+
+    if (!videoId) {
+      window.open(
+        `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+        '_blank',
+        'noopener,noreferrer',
+      )
+      setMusicMessage('Opened YouTube search')
+      return
+    }
+
+    const nextTrack = {
+      id: `custom-${videoId}`,
+      startSeconds: 0,
+      title: 'Custom YouTube video',
+      videoId,
+    }
+
+    setCustomTrack(nextTrack)
+    selectedTrackRef.current = nextTrack
+    setSelectedTrackId(nextTrack.id)
+    setMusicQuery('')
+    setYoutubeFallbackUrl(`https://www.youtube.com/watch?v=${nextTrack.videoId}`)
+    setMusicMessage('Loading YouTube video...')
+    loadTrack(nextTrack, true)
+  }
+
+  function toggleMusic() {
+    if (!playerRef.current || !isReady) {
+      rebuildPlayer(selectedTrackRef.current, true)
+      return
+    }
+
+    if (isPlaying) {
+      playerRef.current.pauseVideo()
+      setIsPlaying(false)
+      return
+    }
+
+    playerRef.current.playVideo()
+  }
+
+  return (
+    <aside
+      aria-label="YouTube music player"
+      className={`book-music-player ${isDraggingMusic ? 'is-dragging' : ''}`}
+      onPointerCancel={handleMusicPointerUp}
+      onPointerDown={handleMusicPointerDown}
+      onPointerMove={handleMusicPointerMove}
+      onPointerUp={handleMusicPointerUp}
+      ref={musicPlayerRef}
+      style={{
+        '--music-x': `${musicPosition.x}px`,
+        '--music-y': `${musicPosition.y}px`,
+      }}
+    >
+      <div className="book-music-controls">
+        <button
+          aria-label={isPlaying ? 'Pause music' : 'Play music'}
+          className={isPlaying ? 'playing' : ''}
+          disabled={isPlayerRequested && !isReady}
+          onClick={toggleMusic}
+          type="button"
+        >
+          <span>{isPlaying ? 'II' : '♪'}</span>
+        </button>
+        <label className="book-music-select-wrap" htmlFor="book-music-select">
+          <span>Music</span>
+          <select id="book-music-select" onChange={handleTrackChange} value={selectedTrack.id}>
+            {availableTracks.map((track) => (
+              <option key={track.id} value={track.id}>
+                {track.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <form className="book-music-search" onSubmit={handleMusicSearch}>
+        <input
+          aria-label="YouTube URL, video ID, or search keywords"
+          onChange={(event) => setMusicQuery(event.target.value)}
+          placeholder="YouTube URL, ID, or keywords"
+          type="search"
+          value={musicQuery}
+        />
+        <button type="submit">Go</button>
+      </form>
+      <a
+        className="book-youtube-link"
+        href={youtubeFallbackUrl}
+        rel="noreferrer"
+        target="_blank"
+      >
+        Open on YouTube
+      </a>
+      {musicMessage ? <p className="book-music-message">{musicMessage}</p> : null}
+      <div className="book-youtube-frame">
+        {isPlayerRequested ? (
+          <div className="book-youtube-mount" key={playerMountKey} ref={playerElementRef} />
+        ) : (
+          <span>Press play to load YouTube</span>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 function BookPage() {
   const [language, setLanguage] = useState('en')
+  const [displayName] = useState(getBookDisplayName)
+  const [typedWishText, setTypedWishText] = useState('')
   const [lightboxItem, setLightboxItem] = useState(null)
   const [isCoverOpen, setIsCoverOpen] = useState(false)
   const [coverSide, setCoverSide] = useState('front')
@@ -241,6 +854,13 @@ function BookPage() {
     originY: 0,
   })
   const text = translations[language].book
+  const wishText = useMemo(
+    () =>
+      displayName
+        ? `Ich w\u00fcnsche dir, ${displayName}, dass du deine Ziele erreichst. Wir sehen uns in Deutschland wieder. Tsch\u00fcssiee!`
+        : '',
+    [displayName],
+  )
   const spreads = useMemo(() => {
     const result = []
 
@@ -253,6 +873,24 @@ function BookPage() {
 
     return result
   }, [])
+
+  useEffect(() => {
+    if (!wishText) {
+      return undefined
+    }
+
+    let nextLength = 0
+    const timer = window.setInterval(() => {
+      nextLength += 1
+      setTypedWishText(wishText.slice(0, nextLength))
+
+      if (nextLength >= wishText.length) {
+        window.clearInterval(timer)
+      }
+    }, WISH_TYPE_SPEED_MS)
+
+    return () => window.clearInterval(timer)
+  }, [wishText])
 
   const spread = spreads[spreadIndex]
   const visibleSpread = pendingSpreadIndex === null ? spread : spreads[pendingSpreadIndex]
@@ -408,6 +1046,17 @@ function BookPage() {
       <button className="book-back-button" onClick={goToLogin} type="button">
         {text.back}
       </button>
+
+      {displayName ? (
+        <div className="book-wish-banner" aria-label="German wish">
+          <p className="book-wish" aria-label={wishText}>
+            <span>{typedWishText}</span>
+            <span className="book-wish-caret" aria-hidden="true" />
+          </p>
+        </div>
+      ) : null}
+
+      <YoutubeMusicPlayer />
 
       <section className="book-stage" aria-label="3D photo book">
         <button

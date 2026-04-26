@@ -1,9 +1,7 @@
-import { useState } from 'react'
 import translations from '../translations.json'
 
 function FlowerPage() {
-  const [language, setLanguage] = useState('en')
-  const text = translations[language].book
+  const text = translations.en.book
 
   function goToLogin() {
     window.location.assign('/')

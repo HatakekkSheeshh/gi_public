@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { saveSession } from '../auth'
 import { API_BASE_URL } from '../config'
 import translations from '../translations.json'
 
@@ -42,16 +43,15 @@ function LoginPage() {
 
       const data = await response.json()
 
-      if (!data.ok) {
+      if (!data.ok || !data.token || !data.redirectUrl) {
         setLoginStatus('error')
         return
       }
 
+      saveSession({ displayName: data.displayName, redirectUrl: data.redirectUrl, token: data.token })
       setLoginStatus('success')
 
-      if (data.redirectUrl) {
-        window.location.assign(data.redirectUrl)
-      }
+      window.location.assign(data.redirectUrl)
     } catch {
       setLoginStatus('error')
     }
