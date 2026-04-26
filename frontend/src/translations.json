@@ -1,0 +1,83 @@
+{
+  "en": {
+    "name": "English",
+    "welcomeLabel": "Welcome",
+    "accountLabel": "Account access",
+    "heroTitle": "In the end, what kills us is memory",
+    "formTitle": "Login to your account",
+    "email": "Username",
+    "emailPlaceholder": "Enter your username",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "showPassword": "Show password",
+    "login": "Login now",
+    "loginSuccess": "Login successful.",
+    "loginError": "Username or password is incorrect.",
+    "book": {
+      "back": "Back to login",
+      "empty": "The end",
+      "backCover": "Back cover",
+      "hint": "Click the book to turn the page",
+      "page": "Page",
+      "previous": "Previous",
+      "next": "Next",
+      "contentsTitle": "CONTENTS",
+      "contentsClass": "Our class",
+      "contentsNguyen": "Nguyên"
+    }
+  },
+  "de": {
+    "name": "Deutsch",
+    "welcomeLabel": "Willkommen",
+    "accountLabel": "Kontozugang",
+    "heroTitle": "Am Ende bringt Erinnerung uns um",
+    "formTitle": "Melde dich bei deinem Konto an",
+    "email": "Benutzername",
+    "emailPlaceholder": "Gib deinen Benutzernamen ein",
+    "password": "Passwort",
+    "passwordPlaceholder": "Gib dein Passwort ein",
+    "showPassword": "Passwort anzeigen",
+    "login": "Jetzt anmelden",
+    "loginSuccess": "Anmeldung erfolgreich.",
+    "loginError": "Benutzername oder Passwort ist falsch.",
+    "book": {
+      "back": "Zur Anmeldung",
+      "empty": "Am Ende",
+      "backCover": "Rückseite",
+      "hint": "Klicke auf das Buch, um umzublättern",
+      "page": "Seite",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "contentsTitle": "INHALT",
+      "contentsClass": "Unsere Klasse",
+      "contentsNguyen": "Nguyên"
+    }
+  },
+  "vi": {
+    "name": "Tiếng Việt",
+    "welcomeLabel": "Chào mừng",
+    "accountLabel": "Truy cập tài khoản",
+    "heroTitle": "Sau cùng, thứ giết chết chúng ta là kỉ niệm",
+    "formTitle": "Đăng nhập tài khoản",
+    "email": "Tên đăng nhập",
+    "emailPlaceholder": "Nhập tên đăng nhập",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Nhập mật khẩu của bạn",
+    "showPassword": "Hiện mật khẩu",
+    "login": "Đăng nhập",
+    "loginSuccess": "Đăng nhập thành công.",
+    "loginError": "Tên đăng nhập hoặc mật khẩu không đúng.",
+    "book": {
+      "back": "Về đăng nhập",
+      "empty": "Kết thúc",
+      "backCover": "Bìa cuối",
+      "hint": "Bấm vào quyển sách để lật trang",
+      "page": "Trang",
+      "previous": "Trước",
+      "next": "Sau",
+      "contentsTitle": "MỤC LỤC",
+      "contentsClass": "Lớp chúng ta",
+      "contentsNguyen": "Nguyên"
+    }
+  }
+}
